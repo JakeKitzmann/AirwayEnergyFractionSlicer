@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AirwayEnergyFraction</class>
+ <widget class="qMRMLWidget" name="AirwayEnergyFraction">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>500</width>
+    <height>559</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>Input volume:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="qMRMLNodeComboBox" name="inputSelector">
+       <property name="toolTip">
+        <string>Pick the input to the algorithm.</string>
+       </property>
+       <property name="nodeTypes">
+        <stringlist notr="true">
+         <string>vtkMRMLScalarVolumeNode</string>
+        </stringlist>
+       </property>
+       <property name="showChildNodeTypes">
+        <bool>false</bool>
+       </property>
+       <property name="addEnabled">
+        <bool>false</bool>
+       </property>
+       <property name="removeEnabled">
+        <bool>false</bool>
+       </property>
+       <property name="SlicerParameterName" stdset="0">
+        <string>inputVolume</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QPushButton" name="dropSeedpointButton">
+     <property name="text">
+      <string>Drop seedpoint</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_3">
+       <property name="text">
+        <string>Window Size</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="windowEdit"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="checkBox">
+       <property name="text">
+        <string>Return ROIs?</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QPushButton" name="printCentroidButton">
+     <property name="text">
+      <string>Print centroid data</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="createResultsButton">
+     <property name="text">
+      <string>Create ROI Results</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_2">
+     <property name="text">
+      <string>Python Console</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="ctkPythonConsole" name="PythonConsole"/>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>20</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ctkPythonConsole</class>
+   <extends>QWidget</extends>
+   <header>ctkPythonConsole.h</header>
+  </customwidget>
+  <customwidget>
+   <class>qMRMLNodeComboBox</class>
+   <extends>QWidget</extends>
+   <header>qMRMLNodeComboBox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>qMRMLWidget</class>
+   <extends>QWidget</extends>
+   <header>qMRMLWidget.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>AirwayEnergyFraction</sender>
+   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
+   <receiver>inputSelector</receiver>
+   <slot>setMRMLScene(vtkMRMLScene*)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>122</x>
+     <y>132</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>248</x>
+     <y>61</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>
