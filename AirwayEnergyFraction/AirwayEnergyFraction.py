@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Optional
 from typing import Annotated
 import vtk
 import slicer   
@@ -15,10 +16,29 @@ import sitkUtils
 from qt import QFileDialog
 
 from slicer import vtkMRMLScalarVolumeNode
-import SimpleITK as sitk
+
+def _ensure_package(pkg, import_name=None, version=None):
+    """
+    Ensure a Python package is available in Slicer's Python.
+    """
+    import_name = import_name or pkg
+    try:
+        __import__(import_name)
+    except ImportError:
+        spec = pkg if version is None else f"{pkg}=={version}"
+        logging.info(f"Installing {spec} for Slicer...")
+        slicer.util.pip_install(spec)
+        __import__(import_name)
+_ensure_package("numpy")
+_ensure_package("pandas")
+_ensure_package("scipy")
+_ensure_package("SimpleITK", import_name="SimpleITK")
+
 import numpy as np
 import pandas as pd
+import SimpleITK as sitk
 from scipy.signal.windows import tukey, hann
+
 
 
 # Slicer Bullshit
@@ -119,9 +139,7 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
             firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
             if firstVolumeNode:
                 self._parameterNode.inputVolume = firstVolumeNode
-    def setParameterNode(self, inputParameterNode: AirwayEnergyFractionParameterNode | None) -> None:
-        if self._parameterNode:
-            self._parameterNode.disconnectGui(self._parameterNodeGuiTag)
+    def setParameterNode(self, inputParameterNode: Optional[AirwayEnergyFractionParameterNode]) -> None:
         self._parameterNode = inputParameterNode
         if self._parameterNode:
             self._parameterNodeGuiTag = self._parameterNode.connectGui(self.ui)
