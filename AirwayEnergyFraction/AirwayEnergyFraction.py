@@ -37,7 +37,7 @@ _ensure_package("SimpleITK", import_name="SimpleITK")
 import numpy as np
 import pandas as pd
 import SimpleITK as sitk
-from scipy.signal.windows import tukey, hann
+from qt import QTableWidgetItem
 
 
 
@@ -98,28 +98,7 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
         self._parameterNode = None
         self._parameterNodeGuiTag = None
         self.centroidFiducialNodesByVolumeId = {}  # volumeID -> fiducial node
-        
-    def setup(self) -> None:
-        # -- slicer code -- 
-        ScriptedLoadableModuleWidget.setup(self)
-        uiWidget = slicer.util.loadUI(self.resourcePath("UI/AirwayEnergyFraction.ui"))
-        self.layout.addWidget(uiWidget)
-        self.ui = slicer.util.childWidgetVariables(uiWidget)
-        uiWidget.setMRMLScene(slicer.mrmlScene)
-        self.logic = AirwayEnergyFractionLogic()
-        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
-        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
-        self.initializeParameterNode()
-        
-        # -- my code -- 
-        
-        self.ui.dropSeedpointButton.connect('clicked(bool)', self.onDropSeedpointButton)
-        self.ui.printCentroidButton.connect('clicked(bool)', self.onPrintCentroidButton)
-        self.ui.createResultsButton.connect('clicked(bool)', self.onCreateResultsButton)
-        
-
     # -- slicer code --
-    
     def cleanup(self) -> None:
         self.removeObservers()
     def enter(self) -> None:
@@ -144,249 +123,344 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
         if self._parameterNode:
             self._parameterNodeGuiTag = self._parameterNode.connectGui(self.ui)
             
+
+    def setup(self) -> None:
+        # -- slicer code -- 
+        ScriptedLoadableModuleWidget.setup(self)
+        uiWidget = slicer.util.loadUI(self.resourcePath("UI/AirwayEnergyFraction.ui"))
+        self.layout.addWidget(uiWidget)
+        self.ui = slicer.util.childWidgetVariables(uiWidget)
+        uiWidget.setMRMLScene(slicer.mrmlScene)
+        self.logic = AirwayEnergyFractionLogic()
+        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
+        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
+        self.initializeParameterNode()
+        
+        # -- my code -- 
             
-    # -- my code --
-    def onDropSeedpointButton(self):
+        self.setupPointsTable()
+        self.ui.pointPairButton.connect('clicked(bool)', self.onPointPairButton)
+        self.ui.executeButton.connect('clicked (bool)', self.onExecuteButton)
+
+        
+    # initialize table that stores all of the points the user has entered
+    def setupPointsTable(self):
+        t = self.ui.pointsTable
+        t.setRowCount(10)
+        t.setColumnCount(2)
+        t.setHorizontalHeaderLabels(['Point 1', 'Point 2'])
+
+        t.verticalHeader().setVisible(True)
+        t.horizontalHeader().setStretchLastSection(True)
+
+        # Fill with empty items so setText later never crashes
+        for r in range(t.rowCount):
+            for c in range(t.columnCount):
+                if t.item(r, c) is None:
+                    t.setItem(r, c, QTableWidgetItem(""))
+
+    # place 2 points to caputure an airway
+    def onPointPairButton(self):
         volumeNode = self._parameterNode.inputVolume
-        if not volumeNode:
-            print("No input volume selected.")
+        self._pairVolumeNode = volumeNode
+
+        if volumeNode is None:
+            slicer.util.errorDisplay("Select an input volume first.")
             return
 
-        centroidNode = self._getCentroidNodeForVolume(volumeNode, createIfMissing=True)
+        # if we dont have a node for the user to place, create one
+        if not hasattr(self, "_pairFidNode") or self._pairFidNode is None:
+            self._pairFidNode = slicer.mrmlScene.AddNewNodeByClass(
+                "vtkMRMLMarkupsFiducialNode", "PointPair"
+            )
+        else: # otherwise use the one we already have
+            self._pairFidNode.RemoveAllControlPoints()
 
-        markupsLogic = slicer.modules.markups.logic()
-        markupsLogic.SetActiveList(centroidNode)
+        self._pairFidNode.SetLocked(False)
 
-        # 0 = place exactly one fiducial
-        markupsLogic.StartPlaceMode(0)
+        # dont stack observers
+        if getattr(self, "_pairObserverTag", None) is not None: 
+            self._pairFidNode.RemoveObserver(self._pairObserverTag)
+        self._pairObserverTag = self._pairFidNode.AddObserver(
+            slicer.vtkMRMLMarkupsNode.PointModifiedEvent, self._onPairPointsModified
+        )
 
+        # create points for placement
+        selectionNode = slicer.mrmlScene.GetNodeByID("vtkMRMLSelectionNodeSingleton")
+        selectionNode.SetReferenceActivePlaceNodeID(self._pairFidNode.GetID())
 
+        interactionNode = slicer.mrmlScene.GetNodeByID("vtkMRMLInteractionNodeSingleton")
+        interactionNode.SetPlaceModePersistence(1)     
+        interactionNode.SetCurrentInteractionMode(interactionNode.Place)
 
-    def onPrintCentroidButton(self):
-        volumeNode = self._parameterNode.inputVolume # works on current volume in combo box
-        if not volumeNode:
-            print("No active input volume.")
+        slicer.util.showStatusMessage("Click 2 fiducial points in the viewer…", 3000)
+
+    def _onPairPointsModified(self, caller, event):
+        fid = self._pairFidNode
+        if fid is None:
             return
 
-        # don't want to make a new one if no centroids defined
-        centroidNode = self._getCentroidNodeForVolume(volumeNode, createIfMissing=False)
-        if not centroidNode or centroidNode.GetNumberOfControlPoints() == 0:
-            print(f"No centroids defined for volume: {volumeNode.GetName()}")
+        # safety
+        if fid.GetNumberOfDefinedControlPoints() < 2:
             return
 
-        # coordinate conversion
-        rasToIjk = vtk.vtkMatrix4x4()
-        volumeNode.GetRASToIJKMatrix(rasToIjk)
+        # get positions
+        ras0 = [0.0, 0.0, 0.0]
+        ras1 = [0.0, 0.0, 0.0]
+        fid.GetNthControlPointPositionWorld(0, ras0)
+        fid.GetNthControlPointPositionWorld(1, ras1)
 
-        n = centroidNode.GetNumberOfControlPoints()
-        print(f"Volume: {volumeNode.GetName()} | Number of centroids: {n}")
+        # convert to IJK
+        ijk0 = self._rasToIJK(self._pairVolumeNode, ras0)
+        ijk1 = self._rasToIJK(self._pairVolumeNode, ras1)
 
-        for i in range(n):
-            ras = [0.0, 0.0, 0.0]
-            centroidNode.GetNthControlPointPosition(i, ras)
+        # put as strings into next empty row
+        row = self._nextEmptyPairRow()
+        s0 = f"{ijk0[0]},{ijk0[1]},{ijk0[2]}"
+        s1 = f"{ijk1[0]},{ijk1[1]},{ijk1[2]}"
+        self._setPairRowStrings(row, s0, s1)
 
-            ijkH = [0.0, 0.0, 0.0, 0.0]
-            rasToIjk.MultiplyPoint([ras[0], ras[1], ras[2], 1.0], ijkH)
+        # exit place mode
+        interactionNode = slicer.mrmlScene.GetNodeByID("vtkMRMLInteractionNodeSingleton")
+        interactionNode.SetPlaceModePersistence(0)
+        interactionNode.SetCurrentInteractionMode(interactionNode.ViewTransform)
 
-            ijk = [int(round(ijkH[0])), int(round(ijkH[1])), int(round(ijkH[2]))]
-            print(f"Centroid {i} IJK: {ijk}")
+        # stop observing
+        if getattr(self, "_pairObserverTag", None) is not None:
+            fid.RemoveObserver(self._pairObserverTag)
+            self._pairObserverTag = None
 
-                
-    def onCreateResultsButton(self):
+        slicer.util.showStatusMessage(f"Saved point pair to row {row}.", 2000)
 
-        volumeNode = self._parameterNode.inputVolume
-        if not volumeNode:
-            print("No input volume selected.")
-            return
 
-        centroidNode = self._getCentroidNodeForVolume(volumeNode, createIfMissing=False)
-        if not centroidNode or centroidNode.GetNumberOfControlPoints() == 0:
-            print(f"No centroids defined for volume: {volumeNode.GetName()}")
-            return
+    # conversion
+    def _rasToIJK(self, volumeNode, ras_world):
+        ras_h = [ras_world[0], ras_world[1], ras_world[2], 1.0]
+        m = vtk.vtkMatrix4x4()
+        volumeNode.GetRASToIJKMatrix(m)
 
-        sitk_img = sitkUtils.PullVolumeFromSlicer(volumeNode) # bring slicer volume to itk image
+        ijk_h = [0.0, 0.0, 0.0, 1.0]
+        m.MultiplyPoint(ras_h, ijk_h)
 
-        # coord system conversion
-        rasToIjk = vtk.vtkMatrix4x4()
-        volumeNode.GetRASToIJKMatrix(rasToIjk)
+        return (int(round(ijk_h[0])), int(round(ijk_h[1])), int(round(ijk_h[2])))
 
-        # convert
-        centroids_ijk = []
-        for i in range(centroidNode.GetNumberOfControlPoints()):
-            ras = [0.0, 0.0, 0.0]
-            centroidNode.GetNthControlPointPosition(i, ras)
+    # table helper
+    def _nextEmptyPairRow(self):
+        t = self.ui.pointsTable
+        for r in range(t.rowCount):
+            a = t.item(r, 0).text().strip() if t.item(r, 0) else ""
+            b = t.item(r, 1).text().strip() if t.item(r, 1) else ""
+            if a == "" and b == "":
+                return r
+        # if none empty, append a row
+        r = t.rowCount
+        t.setRowCount(r + 1)
+        # make sure items exist
+        t.setItem(r, 0, QTableWidgetItem(""))
+        t.setItem(r, 1, QTableWidgetItem(""))
+        return r
 
-            ijkH = [0.0, 0.0, 0.0, 0.0]
-            rasToIjk.MultiplyPoint([ras[0], ras[1], ras[2], 1.0], ijkH)
+    # table helper
+    def _setPairRowStrings(self, row, s1, s2):
+        t = self.ui.pointsTable
+        # ensure items exist
+        if t.item(row, 0) is None:
+            t.setItem(row, 0, QTableWidgetItem(""))
+        if t.item(row, 1) is None:
+            t.setItem(row, 1, QTableWidgetItem(""))
+        t.item(row, 0).setText(s1)
+        t.item(row, 1).setText(s2)
 
-            ijk = [int(round(v)) for v in ijkH[:3]]
-            centroids_ijk.append(ijk)
+    # pull coords from table for use in Analysis
+    def _parseIJKString(self, s):
+        if s is None:
+            return None
+        s = s.strip()
+        if s == "":
+            return None
 
-        # initialize obj
+        parts = [p.strip() for p in s.split(",")]
+        if len(parts) != 3:
+            return None
+
         try:
-            energyFraction = EnergyFraction(int(self.ui.windowEdit.text))
-        except:
-            print("No window defined")
+            i, j, k = (int(round(float(parts[0]))),
+                    int(round(float(parts[1]))),
+                    int(round(float(parts[2]))))
+        except ValueError:
+            return None
+
+        return Point(i, j, k) # return point object of the values stored in the cell (assuming that it's valid)
+
+    def getPointPairsFromTable(self):
+        t = self.ui.pointsTable
+        pairs = []
+
+        for r in range(t.rowCount):
+            item1 = t.item(r, 0)
+            item2 = t.item(r, 1)
+
+            s1 = item1.text() if item1 else ""
+            s2 = item2.text() if item2 else ""
+
+            p1 = self._parseIJKString(s1)
+            p2 = self._parseIJKString(s2)
+
+            # skip fully empty rows
+            if p1 is None and p2 is None:
+                continue
+
+            # if one is missing/invalid, error out (or skip—your call)
+            if p1 is None or p2 is None:
+                raise ValueError(f"Row {r+1} is incomplete or invalid. Expected 'i,j,k' in both columns.")
+
+            pairs.append((p1, p2))
+
+        return pairs
+
+    def onExecuteButton(self):
+        try:
+            point_pairs = self.getPointPairsFromTable()
+        except ValueError as e:
+            slicer.util.errorDisplay(str(e))
             return
 
-        # run pipeline
-        energyFraction.set_centroids(centroids_ijk)
-        energyFraction.set_input_volume(sitk_img)
-        energyFraction.execute()
+        if not point_pairs:
+            slicer.util.errorDisplay("No valid point pairs found in the table.")
+            return
+        
+        
+        analysis = Analysis()
+        sitk_img = sitkUtils.PullVolumeFromSlicer(self._parameterNode.inputVolume) # bring slicer volume to itk image
 
-        # visualize rois created for debug if checked
-        if self.ui.checkBox.isChecked():
-            volName = self._sanitizeName(volumeNode.GetName() or "Volume")
-            print(f"displaying rois for {volName}...")
-
-            for idx, centroid in enumerate(centroids_ijk):
-                roi = EnergyFraction.extract_roi(
-                    sitk_img,
-                    centroid,
-                    window=int(self.ui.windowEdit.text)
-                )
-                
-                # apply Tukey windowing filter, doc'd in EF class (frequency_filter).
-                arr = sitk.GetArrayFromImage(roi).astype(np.float32, copy=False)
-                
-                arr -= arr.mean(dtype=np.float32)
-                alpha = 0.25
-                Nz, Ny, Nx = arr.shape
-                # scipy tukey filters
-                wz = tukey(Nz, alpha)
-                wy = tukey(Ny, alpha)
-                wx = tukey(Nx, alpha)
-                tukey_window = (
-                    wz[:, None, None] *
-                    wy[None, :, None] *
-                    wx[None, None, :]
-                )
-                tukey_window = tukey_window.astype(np.float32, copy=False)
-
-                arr *= tukey_window 
-                roi_windowed = sitk.GetImageFromArray(arr)
-
-                # display ROI
-                roiVolumeNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScalarVolumeNode")
-                roiVolumeNode.SetName(f"{volName}_ROI_Centroid_{idx}")
-                roiVolumeNode.CreateDefaultDisplayNodes()
-                roi_windowed.CopyInformation(roi)   # copy spacing/origin/direction from original ROI
-                sitkUtils.PushVolumeToSlicer(roi_windowed, roiVolumeNode)
-                
-                # display magnitude 
-                F = np.fft.fftshift(np.fft.fftn(arr))
-                mag_log = np.log1p(np.abs(F)).astype(np.float32, copy=False)
-                mag_img = sitk.GetImageFromArray(mag_log.astype(np.float32, copy=False))
-                mag_img.CopyInformation(roi)
-                magNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScalarVolumeNode")
-                magNode.SetName(f"{volName}_FFTMag_C{idx}")
-                magNode.CreateDefaultDisplayNodes()
-                sitkUtils.PushVolumeToSlicer(mag_img, magNode)
-                
-            print("rois and magnitudes displayed")
-
-    # make names nice (because people like putting spaces in file names)
-    def _sanitizeName(self, name: str) -> str:
-        return "".join(c if c.isalnum() or c in ("_", "-", " ") else "_" for c in name).strip()
-
-    # only select centroid for volume selected
-    def _getCentroidNodeForVolume(self, volumeNode, createIfMissing=True):
-        if not volumeNode:
-            return None
-
-        volId = volumeNode.GetID()
-        if volId in self.centroidFiducialNodesByVolumeId:
-            node = self.centroidFiducialNodesByVolumeId[volId]
-            # If it got deleted from the scene, drop it and recreate if requested
-            if node and slicer.mrmlScene.IsNodePresent(node):
-                return node
-            else:
-                self.centroidFiducialNodesByVolumeId.pop(volId, None)
-
-        if not createIfMissing:
-            return None
-
-        volName = self._sanitizeName(volumeNode.GetName() or "Volume")
-        node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
-        node.SetName(f"Centroids_{volName}")
-        node.CreateDefaultDisplayNodes()
-
-        # Optional: store association on the node itself (nice for debugging)
-        node.SetAttribute("AirwayEnergyFraction.VolumeID", volId)
-        node.SetAttribute("AirwayEnergyFraction.VolumeName", volumeNode.GetName() or "")
-
-        self.centroidFiducialNodesByVolumeId[volId] = node
-        return node
-
-
-            
-class EnergyFraction:
-
-    def __init__(self, window=-1):
-        self.centroids = []
-        self.input_volume = None
-        self.window = window
-
-    def set_centroids(self, centroids):
-        self.centroids = centroids
-
-    def set_input_volume(self, input_volume):
-        self.input_volume = input_volume
-
-    def execute(self):
         print()
         print('-'*30)
-        print(f"Running energy fraction on {len(self.centroids)} centroids")
-        print(f'ROI Size: {2 * self.window + 1} voxels in each direction')
-        print()
 
-        cutoffs = [0.05, 0.1, 0.2, 0.4, 0.6]
-        header = ['Centroid I', 'Centroid J', 'Centroid K'] + [f'EnergyFrac_{c}' for c in cutoffs]
-        rows = []
+        results = [] # store for csv output
 
-        for centroid in self.centroids:
-            roi = self.extract_roi(self.input_volume, centroid, window=self.window)
-            print(f"ROI size: {roi.GetSize()}")
+        for p1, p2 in point_pairs:
+            for cutoff in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8]:
+                print("Pair:", (p1.x, p1.y, p1.z), (p2.x, p2.y, p2.z))
+                roi, mask, bbox, rho = analysis.extractSphericalROI(sitk_img, p1, p2)
 
-            row = [centroid[0], centroid[1], centroid[2]]
+                frac, E_total, E_high, arr, arr_filt, mag_log, mag_filt_log = analysis.frequency_filter(roi, cutoff=cutoff)
 
-            print(f'\nCentroid {centroid}')
-            for cutoff in cutoffs:
-                frac, _, _, _ = self.frequency_filter(roi, cutoff=cutoff)
-                row.append(frac)
-                print(f'  cutoff={cutoff:.2f}: {frac*100:.2f}% high energy')
+                if self.ui.returnImagesCheckbox.isChecked():
+                    base = self._ptname(p1)
 
-            rows.append(row)
+                    self.pushToSlicer(roi, base)
+                    self.pushToSlicer(sitk.GetImageFromArray(arr_filt), f"{base}_filtered_image")
+                    self.pushToSlicer(sitk.GetImageFromArray(mag_log), f"{base}_frequency")
+                    self.pushToSlicer(sitk.GetImageFromArray(mag_filt_log), f"{base}_filtered_frequency")
 
-        df = pd.DataFrame(rows, columns=header)
+                print(f'Energy fraction: {frac}')
+                print()
 
-        out_path = QFileDialog.getSaveFileName(
+                results.append({
+                    "p1_x": int(p1.x),
+                    "p1_y": int(p1.y),
+                    "p1_z": int(p1.z),
+                    "p2_x": int(p2.x),
+                    "p2_y": int(p2.y),
+                    "p2_z": int(p2.z),
+                    'cutoff': cutoff,
+                    'recist_diameter': rho,
+                    "energy_fraction": float(frac),
+                })
+
+        df = pd.DataFrame(results)
+
+        out_path, _ = QFileDialog.getSaveFileName(
             None,
             "Save Energy Fraction Results",
             "",
             "CSV files (*.csv)"
         )
 
-        if out_path:
-            df.to_csv(out_path, index=False)
-            print(f"Saved results to: {out_path}")
-        else:
+        if not out_path:
             print("Save cancelled.")
-            
-            
-    # corner freq, order for butterworth highpass, alpha for tukey filter 
+            return
+
+        file_exists = os.path.exists(out_path)
+
+        df.to_csv(
+            out_path,
+            mode='a' if file_exists else 'w',
+            header=not file_exists,   # only write header once
+            index=False
+        )
+
+        print(f"{'Appended to' if file_exists else 'Saved'} results at: {out_path}")
+
+
+    def pushToSlicer(self, img, title):
+        volumeNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScalarVolumeNode")
+        volumeNode.SetName(title)
+        volumeNode.CreateDefaultDisplayNodes()
+        sitkUtils.PushVolumeToSlicer(img, volumeNode)
+
+    def _ptname(self, p):
+        return f"{int(round(p.x))}_{int(round(p.y))}_{int(round(p.z))}"
+
+class Point:
+    def __init__(self, x, y, z):
+        self.x = float(x)
+        self.y = float(y)
+        self.z = float(z)
+
+class Analysis:
+    def __init__(self):
+        pass
+
+    # sitk image, Point(), Point()
     @staticmethod
-    def frequency_filter(image, cutoff=0.1, order=2, alpha=0.25, return_mag=False):
+    def extractSphericalROI(image, p1, p2, alpha=0.25):
+        image = sitk.GetArrayFromImage(image)
+
+
+        midpoint = Point((p1.x + p2.x)/2, (p1.y + p2.y)/2, (p1.z + p2.z)/2) # midpoint between fiducial point vectors
+        rho = np.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2 + (p2.z - p1.z)**2) # the diameter in a sphere around the airway
+        print('midpoint', midpoint.x, midpoint.y, midpoint.z)
+        print('rho of spherical coord', rho)
+
+        # create box around midpoint that encompasses the sphere
+        shape = image.shape
+        zmin = max(int(midpoint.z - rho), 0)
+        zmax = min(int(midpoint.z + rho + 1), shape[0])
+        ymin = max(int(midpoint.y - rho), 0)
+        ymax = min(int(midpoint.y + rho + 1), shape[1])
+        xmin = max(int(midpoint.x - rho), 0)
+        xmax = min(int(midpoint.x + rho + 1), shape[2])
         
-        if image.GetNumberOfComponentsPerPixel() > 1:
-            image = sitk.VectorIndexSelectionCast(image, 0)
+        # crop image to box
+        sub_image = image[zmin:zmax, ymin:ymax, xmin:xmax].astype(np.float32, copy=False)
+
+        # create grid for computation
+        zz, yy, xx = np.ogrid[zmin:zmax, ymin:ymax, xmin:xmax]
+        r = np.sqrt((zz - midpoint.z)**2 + (yy - midpoint.y)**2 + (xx - midpoint.x)**2).astype(np.float32, copy=False) # create ball on grid with rho
+
+        # cutoff
+        r0 = rho * (1.0 - alpha)
+        soft_mask = np.ones_like(r, dtype=np.float32)
+
+        soft_mask[r > rho] = 0.0 # zero out everything after cutoff
+        if rho > 0 and r0 < rho: # if point after cutoff
+            taper = (r > r0) & (r <= rho) # boolean to determine outside cutoff
+            soft_mask[taper] = 0.5 * (1.0 + np.cos(np.pi * (r[taper] - r0) / (rho - r0))) # fade out anything past cutoff
+
+        sub_masked = sitk.GetImageFromArray(sub_image * soft_mask) # mask the image
+
+        bbox = (zmin, zmax, ymin, ymax, xmin, xmax) # return the bounding box of the image to relate to full image if needed
+        return sub_masked, soft_mask, bbox, rho
+    
+    @staticmethod
+    def frequency_filter(image, cutoff=0.4, order=2):
 
         img = sitk.Cast(image, sitk.sitkFloat32)
         arr = sitk.GetArrayFromImage(img).astype(np.float32, copy=False)
         arr -= arr.mean(dtype=np.float32)
 
-        # for 3d fourier dimension match
-        # make into an isotropic, maximally even sided cube
+        # isotrpoic, even sided cube
         Z, Y, X = arr.shape
         m = min(Z, Y, X)
         if m % 2 != 0:
@@ -395,66 +469,32 @@ class EnergyFraction:
         z0 = (Z - m) // 2
         y0 = (Y - m) // 2
         x0 = (X - m) // 2
-
         arr = arr[z0:z0+m, y0:y0+m, x0:x0+m]
-        
-        Nz, Ny, Nx = arr.shape
+        # np.fft.fftshift shifts frequency domain to center DC, radial frequencies, np.fft.fftn computes 3D DFT
+        F = np.fft.fftshift(np.fft.fftn(arr))
+        mag2 = (np.abs(F) ** 2).astype(np.float64, copy=False) # we care about the magnitudes (power since we're squaring for energy)
 
-        # scipy tukey filters
-        wz = tukey(Nz, alpha)
-        wy = tukey(Ny, alpha)
-        wx = tukey(Nx, alpha)
+        f = np.fft.fftfreq(m, d=1.0) # convert to cycles per sample -- how many times does wave oscillate in one voxel
 
-        tukey_window = (
-            wz[:, None, None] *
-            wy[None, :, None] *
-            wx[None, None, :]
-        ).astype(np.float32, copy=False)
+        # create grid of the frequencies
+        fz = f[:, None, None]
+        fy = f[None, :, None]
+        fx = f[None, None, :]
 
-        arr *= tukey_window # apply tukey_window to the ROI image to avoid hard 
-        # cropping issues and mitigate human error between centroid placements
+        r = np.sqrt(fz**2 + fy**2 + fx**2) # create rho for spherical HP ideal mask
+        r = np.fft.fftshift(r) # shift mask to align with fourier magnitudes
 
-        F = np.fft.fftn(arr)
-        F = np.fft.fftshift(F)
-        
-        mag2 = np.abs(F)**2
+        f_c = cutoff * 0.5  # nyquist is 1/2 max frequency. our filter is a fraction of the nyquist rate, so 1/2 * cutoff, where cutoff is portion of image
+        H = (r >= f_c).astype(np.float32)  # ideal
 
-        z, y, x = np.ogrid[:m, :m, :m]
-        c = m // 2
-        r = np.sqrt((z-c)**2 + (y-c)**2 + (x-c)**2)
-        r_norm = r / r.max()
+        E_total = mag2.sum(dtype=np.float64) # sum of power = energy
+        E_high = (mag2 * (H**2)).sum(dtype=np.float64) # energy of masked
+        frac = E_high / (E_total + 1e-12) # ef
 
-        H = 1 / (1 + (cutoff / (r_norm + 1e-12))**(2*order))
+        # visualization
+        F_filt = F * H
+        arr_filt = np.real(np.fft.ifftn(np.fft.ifftshift(F_filt))).astype(np.float32, copy=False)
+        mag_log = np.log1p(np.abs(F)).astype(np.float32, copy=False)
+        mag_filt_log = np.log1p(np.abs(F_filt)).astype(np.float32, copy=False)
 
-        E_total = mag2.sum()
-        E_high = (mag2 * (H**2)).sum()
-        frac = E_high / (E_total + 1e-12)
-        return frac, E_total, E_high, arr
-    
-    @staticmethod
-    def extract_roi(img, centroid, window=50):
-        x, y, z = centroid
-        size = img.GetSize()
-        
-        x_min = max(x - window, 0)
-        x_max = min(x + window, size[0] - 1)
-        y_min = max(y - window, 0)
-        y_max = min(y + window, size[1] - 1)
-        z_min = max(z - window, 0)
-        z_max = min(z + window, size[2] - 1)
-
-        roi_size  = [x_max - x_min + 1,
-                    y_max - y_min + 1,
-                    z_max - z_min + 1]
-
-        roi_index = [x_min, y_min, z_min]
-        
-        roi = sitk.RegionOfInterest(img, index=roi_index, size=roi_size)
-        
-        # recreate metadata
-        original_origin = img.TransformIndexToPhysicalPoint(roi_index)
-        roi.SetOrigin(original_origin)
-        roi.SetDirection(img.GetDirection())
-        roi.SetSpacing(img.GetSpacing())
-        
-        return roi
+        return frac, E_total, E_high, arr, arr_filt, mag_log, mag_filt_log

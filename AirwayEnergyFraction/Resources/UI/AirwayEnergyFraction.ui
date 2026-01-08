@@ -47,76 +47,39 @@
     </layout>
    </item>
    <item>
-    <widget class="QPushButton" name="dropSeedpointButton">
+    <widget class="QLabel" name="label_4">
      <property name="text">
-      <string>Drop seedpoint</string>
+      <string>Current point pairs</string>
      </property>
     </widget>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_2">
-     <item>
-      <spacer name="horizontalSpacer">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QLabel" name="label_3">
-       <property name="text">
-        <string>Window Size</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLineEdit" name="windowEdit"/>
-     </item>
-    </layout>
+    <widget class="QTableWidget" name="pointsTable"/>
    </item>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <item>
-      <spacer name="horizontalSpacer_2">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
+      <widget class="QPushButton" name="pointPairButton">
+       <property name="text">
+        <string>Add Point Pair</string>
        </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
+      </widget>
      </item>
      <item>
-      <widget class="QCheckBox" name="checkBox">
+      <widget class="QPushButton" name="executeButton">
        <property name="text">
-        <string>Return ROIs?</string>
+        <string>Execute</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="returnImagesCheckbox">
+       <property name="text">
+        <string>Return images</string>
        </property>
       </widget>
      </item>
     </layout>
-   </item>
-   <item>
-    <widget class="QPushButton" name="printCentroidButton">
-     <property name="text">
-      <string>Print centroid data</string>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QPushButton" name="createResultsButton">
-     <property name="text">
-      <string>Create ROI Results</string>
-     </property>
-    </widget>
    </item>
    <item>
     <widget class="QLabel" name="label_2">
