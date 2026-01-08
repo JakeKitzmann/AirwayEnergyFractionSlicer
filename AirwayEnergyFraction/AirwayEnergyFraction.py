@@ -3,6 +3,9 @@ import os
 from typing import Optional
 from typing import Annotated
 import vtk
+import sitkUtils
+from qt import QFileDialog
+from slicer import vtkMRMLScalarVolumeNode
 import slicer   
 from slicer.i18n import tr as _
 from slicer.i18n import translate
@@ -12,15 +15,9 @@ from slicer.parameterNodeWrapper import (
     parameterNodeWrapper,
     WithinRange,
 )
-import sitkUtils
-from qt import QFileDialog
 
-from slicer import vtkMRMLScalarVolumeNode
-
+# check if package is in slicer env, if not install it.
 def _ensure_package(pkg, import_name=None, version=None):
-    """
-    Ensure a Python package is available in Slicer's Python.
-    """
     import_name = import_name or pkg
     try:
         __import__(import_name)
@@ -29,6 +26,7 @@ def _ensure_package(pkg, import_name=None, version=None):
         logging.info(f"Installing {spec} for Slicer...")
         slicer.util.pip_install(spec)
         __import__(import_name)
+
 _ensure_package("numpy")
 _ensure_package("pandas")
 _ensure_package("scipy")
@@ -38,8 +36,6 @@ import numpy as np
 import pandas as pd
 import SimpleITK as sitk
 from qt import QTableWidgetItem
-
-
 
 # Slicer Bullshit
 @parameterNodeWrapper
@@ -86,7 +82,7 @@ class AirwayEnergyFraction(ScriptedLoadableModule):
         self.parent.title = _("AirwayEnergyFraction")
         self.parent.categories = [translate("qSlicerAbstractCoreModule", "APPIL Tools")]
         self.parent.dependencies = []
-        self.parent.contributors = ["Jacob Kitmzann"]
+        self.parent.contributors = ["Jacob Kitzmann"]
         self.parent.helpText = _('')
         self.parent.acknowledgementText = _('')
 
@@ -417,11 +413,10 @@ class Analysis:
     def extractSphericalROI(image, p1, p2, alpha=0.25):
         image = sitk.GetArrayFromImage(image)
 
-
         midpoint = Point((p1.x + p2.x)/2, (p1.y + p2.y)/2, (p1.z + p2.z)/2) # midpoint between fiducial point vectors
         rho = np.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2 + (p2.z - p1.z)**2) # the diameter in a sphere around the airway
-        print('midpoint', midpoint.x, midpoint.y, midpoint.z)
-        print('rho of spherical coord', rho)
+        # print('midpoint', midpoint.x, midpoint.y, midpoint.z)
+        # print('rho of spherical coord', rho)
 
         # create box around midpoint that encompasses the sphere
         shape = image.shape
@@ -444,18 +439,17 @@ class Analysis:
         soft_mask = np.ones_like(r, dtype=np.float32)
 
         soft_mask[r > rho] = 0.0 # zero out everything after cutoff
-        if rho > 0 and r0 < rho: # if point after cutoff
-            taper = (r > r0) & (r <= rho) # boolean to determine outside cutoff
-            soft_mask[taper] = 0.5 * (1.0 + np.cos(np.pi * (r[taper] - r0) / (rho - r0))) # fade out anything past cutoff
+        taper = (r > r0) & (r <= rho) # boolean to determine outside cutoff
+        soft_mask[taper] = 0.5 * (1.0 + np.cos(np.pi * (r[taper] - r0) / (rho - r0))) # fade out anything past cutoff
 
         sub_masked = sitk.GetImageFromArray(sub_image * soft_mask) # mask the image
 
         bbox = (zmin, zmax, ymin, ymax, xmin, xmax) # return the bounding box of the image to relate to full image if needed
         return sub_masked, soft_mask, bbox, rho
     
+    # sitk image, cutoff for ideal HP filter
     @staticmethod
-    def frequency_filter(image, cutoff=0.4, order=2):
-
+    def frequency_filter(image, cutoff=0.4):
         img = sitk.Cast(image, sitk.sitkFloat32)
         arr = sitk.GetArrayFromImage(img).astype(np.float32, copy=False)
         arr -= arr.mean(dtype=np.float32)
