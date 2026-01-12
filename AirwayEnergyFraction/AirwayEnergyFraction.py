@@ -471,12 +471,11 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
 
         # for all point pairs
         for p1, p2 in point_pairs:
-            for cutoff in checkboxList: # for different cycle/mm cutoffs
-                for radius_mult in radiusList: # for different radius multipliers
-                    print("Pair:", (p1.x, p1.y, p1.z), (p2.x, p2.y, p2.z))
+            for radius_mult in radiusList: # for different radius multipliers
+                 # get the spherical ROI
+                roi, mask, bbox, rho, rho_mm, recist = analysis.extractSphericalROI(sitk_img, p1, p2, window=self.ui.taperRoiCheckbox.isChecked(), alpha=0.25, radius_multiplier=radius_mult)
 
-                    # get the spherical ROI
-                    roi, mask, bbox, rho, rho_mm, recist = analysis.extractSphericalROI(sitk_img, p1, p2, window=self.ui.taperRoiCheckbox.isChecked(), alpha=0.25, radius_multiplier=radius_mult)
+                for cutoff in checkboxList: # for different cycle/mm cutoffs, put here so we don't have to recompute ROI
 
                     # compute frequency filter and energy fraction of our ROI
                     frac, E_total, E_high, img_cube, arr, arr_filt, mag_log, mag_filt_log = \
@@ -501,19 +500,20 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
 
                     # csv results
                     results.append({
-                        'volume_name': volume_name,
-                        'volume_id': volume_id,
-                        "p1_x": int(p1.x),
-                        "p1_y": int(p1.y),
-                        "p1_z": int(p1.z),
-                        "p2_x": int(p2.x),
-                        "p2_y": int(p2.y),
-                        "p2_z": int(p2.z),
-                        'cutoff': cutoff,
-                        'voxel_sphere_radius': rho,
-                        'mm_sphere_radius': rho_mm,
-                        'recist_diameter': recist,
-                        "energy_fraction": float(frac),
+                        'volume_name':          volume_name,
+                        'volume_id':            volume_id,
+                        "p1_x":                 int(p1.x),
+                        "p1_y":                 int(p1.y),
+                        "p1_z":                 int(p1.z),
+                        "p2_x":                 int(p2.x),
+                        "p2_y":                 int(p2.y),
+                        "p2_z":                 int(p2.z),
+                        'cutoff':               cutoff,
+                        'voxel_sphere_radius':  rho,
+                        'mm_sphere_radius':     rho_mm,
+                        'recist_diameter':      recist,
+                        'radius_fraction':      radius_mult,
+                        "energy_fraction":      float(frac),
                     })
 
         df = pd.DataFrame(results)
@@ -656,7 +656,6 @@ class Analysis:
         y0 = (Y - m) // 2
         x0 = (X - m) // 2
 
-        # IMPORTANT: SimpleITK index order is (x,y,z)
         img_cube = sitk.RegionOfInterest(img, size=[m, m, m], index=[x0, y0, z0])
 
         arr = sitk.GetArrayFromImage(img_cube).astype(np.float32, copy=False)
@@ -671,7 +670,7 @@ class Analysis:
 
         sx, sy, sz = img_cube.GetSpacing()
 
-        # Build freq axes in cycles/mm
+        # build freq axes in cycles/mm
         fz = np.fft.fftfreq(m, d=sz)[:, None, None]
         fy = np.fft.fftfreq(m, d=sy)[None, :, None]
         fx = np.fft.fftfreq(m, d=sx)[None, None, :]
