@@ -473,13 +473,19 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
         for p1, p2 in point_pairs:
             for radius_mult in radiusList: # for different radius multipliers
                  # get the spherical ROI
-                roi, mask, bbox, rho, rho_mm, recist = analysis.extractSphericalROI(sitk_img, p1, p2, window=self.ui.taperRoiCheckbox.isChecked(), alpha=0.25, radius_multiplier=radius_mult)
+                roi, mask, bbox, rho, rho_mm, recist = \
+                    analysis.extractROI(sitk_img, p1, p2, window=self.ui.taperRoiCheckbox.isChecked(), alpha=0.25, radius_multiplier=radius_mult, spherical=self.ui.sphericalRadioButton.isChecked())
 
                 for cutoff in checkboxList: # for different cycle/mm cutoffs, put here so we don't have to recompute ROI
 
                     # compute frequency filter and energy fraction of our ROI
                     frac, E_total, E_high, img_cube, arr, arr_filt, mag_log, mag_filt_log = \
-                        analysis.frequency_filter(roi, cutoff=cutoff, remove_dc=self.ui.removeDcCheckbox.isChecked())
+                        analysis.frequencyFilter3D(roi, cutoff=cutoff)
+                    
+                    D2_frac, D2_E_total, D2_E_high, D2_img_sq, D2_arr, D2_arr_filt, D2_mag_log, D2_mag_filt_log = \
+                        analysis.frequencyFilter2D(img_cube, cutoff=cutoff)
+
+
 
                     # recreate sitk filtered image and copy metadata
                     img_filt = sitk.GetImageFromArray(arr_filt)
@@ -493,13 +499,23 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
                     # push to slicer if desired, big time slowdown here
                     if self.ui.returnImagesCheckbox.isChecked():
                         base = self._ptname(p1)
-                        self.pushToSlicer(roi, f'{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_spherical_roi')
-                        self.pushToSlicer(sitk.GetImageFromArray(arr_filt), f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_spherical_roi_filtered_image")
-                        self.pushToSlicer(sitk.GetImageFromArray(mag_log), f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_spherical_roi_frequency")
-                        self.pushToSlicer(sitk.GetImageFromArray(mag_filt_log), f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_spherical_roi_filtered_frequency")
+                        self.pushToSlicer(roi, f'{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}')
+                        self.pushToSlicer(sitk.GetImageFromArray(arr_filt), f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_filtered_image")
+                        self.pushToSlicer(sitk.GetImageFromArray(mag_log), f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_frequency")
+                        self.pushToSlicer(sitk.GetImageFromArray(mag_filt_log), f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_filtered_frequency")
+
+                        img2d = sitk.GetImageFromArray(D2_arr[None, ...].astype(np.float32, copy=False))
+                        img2d.CopyInformation(D2_img_sq)
+                        self.pushToSlicer(img2d,  f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_2D")
+
+                        self.pushToSlicer(sitk.GetImageFromArray(D2_arr_filt), f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_filtered_image_2D")
+                        self.pushToSlicer(sitk.GetImageFromArray(D2_mag_log), f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_frequency_2D")
+                        self.pushToSlicer(sitk.GetImageFromArray(D2_mag_filt_log), f"{volume_name}_{base}_cutoff-{cutoff}_radiusmult-{radius_mult}_filtered_frequency_2D")
+                        
 
                     # csv results
                     results.append({
+                        'title':                self.ui.customLineEdit.text,
                         'volume_name':          volume_name,
                         'volume_id':            volume_id,
                         "p1_x":                 int(p1.x),
@@ -513,7 +529,8 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
                         'mm_sphere_radius':     rho_mm,
                         'recist_diameter':      recist,
                         'radius_fraction':      radius_mult,
-                        "energy_fraction":      float(frac),
+                        '2D_energy_fraction':    float(D2_frac),
+                        "3D_energy_fraction":      float(frac),
                     })
 
         df = pd.DataFrame(results)
@@ -568,7 +585,7 @@ class Analysis:
 
     # sitk image, Point(), Point()
     @staticmethod
-    def extractSphericalROI(image_sitk, p1, p2, window=True, alpha=0.25, radius_multiplier=1.0):
+    def extractROI(image_sitk, p1, p2, window=True, alpha=0.25, radius_multiplier=1.0, spherical=False):
         image = sitk.GetArrayFromImage(image_sitk)  # arr order: (z,y,x)
 
         # find midpoint between p1 and p2
@@ -627,7 +644,10 @@ class Analysis:
             taper = (r_mm_grid > r0_mm) & (r_mm_grid <= radius_mm) # taper to full value as we get closer to center
             soft_mask[taper] = 0.5 * (1.0 + np.cos(np.pi * (r_mm_grid[taper] - r0_mm) / (radius_mm - r0_mm))) # apply cosine taper along radius of sphere
 
-        sub_masked = sitk.GetImageFromArray(sub_image * soft_mask) # mask and create itk image
+        if spherical:
+            sub_masked = sitk.GetImageFromArray(sub_image * soft_mask) # mask
+        else:
+            sub_masked = sitk.GetImageFromArray(sub_image)
 
         # recreate metadata
         sub_masked.SetSpacing(image_sitk.GetSpacing())
@@ -638,11 +658,66 @@ class Analysis:
         # return the bounding box of the image to relate to full image if ever needed
         bbox = (zmin, zmax, ymin, ymax, xmin, xmax) 
         return sub_masked, soft_mask, bbox, radius_vxl, radius_mm, recist
+    
+    @staticmethod
+    def frequencyFilter2D(image, cutoff=0.4):
+        img = sitk.Cast(image, sitk.sitkFloat32)
 
-        
+        # array view: (Z, Y, X)
+        Z, Y, X = sitk.GetArrayViewFromImage(img).shape
+
+        # crop to even-shaped SQUARE for 2D FFT (in-plane only)
+        m = min(Y, X)
+        if m % 2 != 0:
+            m -= 1
+
+        y0 = (Y - m) // 2
+        x0 = (X - m) // 2
+
+        zmid = Z // 2
+
+        # ROI: one slice thick at zmid (size order is [x,y,z], index order is [x,y,z])
+        img_sq = sitk.RegionOfInterest(img, size=[m, m, 1], index=[x0, y0, zmid])
+
+        # 2D array (m,m)
+        arr = sitk.GetArrayFromImage(img_sq)[0].astype(np.float32, copy=False)
+
+        sx, sy, sz = img_sq.GetSpacing()  # (x,y,z)
+
+        # 2D FFT
+        F = np.fft.fftshift(np.fft.fft2(arr))
+        mag2 = (np.abs(F) ** 2).astype(np.float64, copy=False)
+
+        # build 2D freq grid in cycles/mm
+        fy = np.fft.fftfreq(m, d=sy)[:, None]   # (m,1)
+        fx = np.fft.fftfreq(m, d=sx)[None, :]   # (1,m)
+        r = np.sqrt(fy**2 + fx**2)
+        r = np.fft.fftshift(r)
+
+        # ideal HP mask
+        f_c = float(cutoff)
+        H = (r >= f_c).astype(np.float32)
+
+        E_total = mag2.sum(dtype=np.float64)
+        E_high  = (mag2 * (H**2)).sum(dtype=np.float64)
+        frac = E_high / (E_total + 1e-12)
+
+        # filter + inverse
+        F_filt = F * H
+        arr_filt = np.real(np.fft.ifft2(np.fft.ifftshift(F_filt))).astype(np.float32, copy=False)
+
+        # debug magnitude (log)
+        mag_log = np.log1p(np.abs(F)).astype(np.float32, copy=False)
+        mag_filt_log = np.log1p(np.abs(F_filt)).astype(np.float32, copy=False)
+
+        nyq = min(0.5 / sx, 0.5 / sy)
+        print("zmid=", zmid, "spacing(x,y)=", (sx, sy), "nyquist(cyc/mm)=", nyq, "cutoff(cyc/mm)=", f_c)
+
+        return frac, E_total, E_high, img_sq, arr, arr_filt, mag_log, mag_filt_log
+
     # sitk image, cutoff for ideal HP filter, 
     @staticmethod
-    def frequency_filter(image, cutoff=0.4, remove_dc=True):
+    def frequencyFilter3D(image, cutoff=0.4):
 
         img = sitk.Cast(image, sitk.sitkFloat32)
 
@@ -659,10 +734,6 @@ class Analysis:
         img_cube = sitk.RegionOfInterest(img, size=[m, m, m], index=[x0, y0, z0])
 
         arr = sitk.GetArrayFromImage(img_cube).astype(np.float32, copy=False)
-
-        # remove DC component
-        if remove_dc:
-            arr -= arr.mean(dtype=np.float32)
 
         # FFT
         F = np.fft.fftshift(np.fft.fftn(arr))
