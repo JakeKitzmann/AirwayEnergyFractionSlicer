@@ -146,6 +146,7 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
         currentVol = self._parameterNode.inputVolume
         self.onInputVolumeChanged(currentVol)
 
+
     # initialize table that stores all of the points the user has entered
     def setupPointsTable(self):
         t = self.ui.pointsTable
@@ -584,6 +585,7 @@ class Analysis:
         pass
 
     # sitk image, Point(), Point()
+    # cosine tapering only available in spherical ROI, can implement later if needed
     @staticmethod
     def extractROI(image_sitk, p1, p2, window=True, alpha=0.25, radius_multiplier=1.0, spherical=False):
         image = sitk.GetArrayFromImage(image_sitk)  # arr order: (z,y,x)

@@ -57,7 +57,10 @@
     <widget class="QTableWidget" name="pointsTable"/>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="verticalLayout_2">
+    <layout class="QVBoxLayout" name="vertLayout">
+     <item>
+      <layout class="QVBoxLayout" name="layout"/>
+     </item>
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_3">
        <item>
@@ -110,17 +113,17 @@
           <string>Return images</string>
          </property>
          <property name="checked">
-          <bool>true</bool>
+          <bool>false</bool>
          </property>
         </widget>
        </item>
        <item>
         <widget class="QCheckBox" name="taperRoiCheckbox">
          <property name="text">
-          <string>Taper ROI</string>
+          <string>Taper ROI (spherical only)</string>
          </property>
          <property name="checked">
-          <bool>true</bool>
+          <bool>false</bool>
          </property>
         </widget>
        </item>
@@ -154,7 +157,7 @@
           <string>0.1</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -174,7 +177,7 @@
           <string>0.3</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -184,7 +187,7 @@
           <string>0.4</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -194,7 +197,7 @@
           <string>0.6</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -204,7 +207,7 @@
           <string>0.8</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -329,6 +332,13 @@
       </layout>
      </item>
      <item>
+      <widget class="QLabel" name="label_8">
+       <property name="text">
+        <string>Custom name:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <layout class="QHBoxLayout" name="horizontalLayout_5">
        <item>
         <spacer name="horizontalSpacer_7">
@@ -344,13 +354,6 @@
         </spacer>
        </item>
        <item>
-        <widget class="QLabel" name="label_8">
-         <property name="text">
-          <string>Custom name:</string>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QLineEdit" name="customLineEdit">
          <property name="text">
           <string>Scan</string>
@@ -361,19 +364,6 @@
      </item>
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_9">
-       <item>
-        <spacer name="horizontalSpacer_5">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>40</width>
-           <height>20</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
        <item>
         <widget class="QPushButton" name="executeButton">
          <property name="text">
