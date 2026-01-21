@@ -147,7 +147,7 @@
        <item>
         <widget class="QCheckBox" name="taperRoiCheckbox">
          <property name="text">
-          <string>Taper ROI</string>
+          <string>Taper ROI (spherical only)</string>
          </property>
          <property name="checked">
           <bool>false</bool>
