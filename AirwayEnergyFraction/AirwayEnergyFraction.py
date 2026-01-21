@@ -115,7 +115,7 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
         self.setParameterNode(self.logic.getParameterNode())
         if not self._parameterNode.inputVolume:
             firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
-            if firstVolumeNode:
+            if firstsVolumeNode:
                 self._parameterNode.inputVolume = firstVolumeNode
     def setParameterNode(self, inputParameterNode: Optional[AirwayEnergyFractionParameterNode]) -> None:
         self._parameterNode = inputParameterNode
