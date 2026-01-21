@@ -473,13 +473,14 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
         for p1, p2 in point_pairs:
             for radius_mult in radiusList: # for different radius multipliers
                  # get the spherical ROI
-                roi, mask, bbox, rho, rho_mm, recist = analysis.extractSphericalROI(sitk_img, p1, p2, window=self.ui.taperRoiCheckbox.isChecked(), alpha=0.25, radius_multiplier=radius_mult)
+                roi, mask, bbox, rho, rho_mm, recist = analysis.extractSphericalROI(sitk_img, p1, p2, spherical = not self.ui.cubicRadioButton.isChecked(), 
+                                                                                    taper=self.ui.taperRoiCheckbox.isChecked(), alpha=0.25, radius_multiplier=radius_mult)
 
                 for cutoff in checkboxList: # for different cycle/mm cutoffs, put here so we don't have to recompute ROI
 
                     # compute frequency filter and energy fraction of our ROI
                     frac, E_total, E_high, img_cube, arr, arr_filt, mag_log, mag_filt_log = \
-                        analysis.frequency_filter(roi, cutoff=cutoff, remove_dc=self.ui.removeDcCheckbox.isChecked())
+                        analysis.frequency_filter(roi, cutoff=cutoff)
 
                     # recreate sitk filtered image and copy metadata
                     img_filt = sitk.GetImageFromArray(arr_filt)
@@ -568,7 +569,11 @@ class Analysis:
 
     # sitk image, Point(), Point()
     @staticmethod
-    def extractSphericalROI(image_sitk, p1, p2, window=True, alpha=0.25, radius_multiplier=1.0):
+    def extractSphericalROI(image_sitk, p1, p2, spherical=False, taper=False, alpha=0.25, radius_multiplier=1.0):
+
+        print("taper:", taper, "type:", type(taper), "repr:", repr(taper))
+
+
         image = sitk.GetArrayFromImage(image_sitk)  # arr order: (z,y,x)
 
         # find midpoint between p1 and p2
@@ -617,15 +622,33 @@ class Analysis:
         dx = (xx - midpoint.x) * sx
         r_mm_grid = np.sqrt(dz*dz + dy*dy + dx*dx).astype(np.float32, copy=False)
 
-        # build soft mask with cosine taper to avoid harsh boundary of sphere within ROI
-        r0_mm = radius_mm * (1.0 - alpha)
+        # build soft mask
         soft_mask = np.ones_like(r_mm_grid, dtype=np.float32)
-        soft_mask[r_mm_grid > radius_mm] = 0.0 # anything outside radius is zero
+        r0_mm = radius_mm * (1.0 - alpha)
 
-        # only taper if wanted
-        if window:
-            taper = (r_mm_grid > r0_mm) & (r_mm_grid <= radius_mm) # taper to full value as we get closer to center
-            soft_mask[taper] = 0.5 * (1.0 + np.cos(np.pi * (r_mm_grid[taper] - r0_mm) / (radius_mm - r0_mm))) # apply cosine taper along radius of sphere
+        if spherical:
+            # hard spherical cutoff
+            soft_mask[r_mm_grid > radius_mm] = 0.0
+
+            if taper:
+                taper_mask = (r_mm_grid > r0_mm) & (r_mm_grid <= radius_mm)
+                soft_mask[taper_mask] = 0.5 * (
+                    1.0 + np.cos(np.pi * (r_mm_grid[taper_mask] - r0_mm) / (radius_mm - r0_mm))
+                )
+
+        else:
+            if taper:
+                # cube boundary using L-infinity distance
+                d_inf = np.maximum(np.maximum(np.abs(dx), np.abs(dy)), np.abs(dz))
+                # hard cubic cutoff
+                soft_mask[d_inf > radius_mm] = 0.0
+                taper_mask = (d_inf > r0_mm) & (d_inf <= radius_mm)
+                soft_mask[taper_mask] = 0.5 * (
+                    1.0 + np.cos(np.pi * (d_inf[taper_mask] - r0_mm) / (radius_mm - r0_mm))
+                )
+
+        print(np.unique(soft_mask, return_counts=True))
+
 
         sub_masked = sitk.GetImageFromArray(sub_image * soft_mask) # mask and create itk image
 
@@ -642,7 +665,7 @@ class Analysis:
         
     # sitk image, cutoff for ideal HP filter, 
     @staticmethod
-    def frequency_filter(image, cutoff=0.4, remove_dc=True):
+    def frequency_filter(image, cutoff=0.4):
 
         img = sitk.Cast(image, sitk.sitkFloat32)
 
@@ -659,10 +682,6 @@ class Analysis:
         img_cube = sitk.RegionOfInterest(img, size=[m, m, m], index=[x0, y0, z0])
 
         arr = sitk.GetArrayFromImage(img_cube).astype(np.float32, copy=False)
-
-        # remove DC component
-        if remove_dc:
-            arr -= arr.mean(dtype=np.float32)
 
         # FFT
         F = np.fft.fftshift(np.fft.fftn(arr))

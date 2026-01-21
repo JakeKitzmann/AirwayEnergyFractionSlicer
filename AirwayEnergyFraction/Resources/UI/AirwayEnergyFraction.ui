@@ -57,7 +57,34 @@
     <widget class="QTableWidget" name="pointsTable"/>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="verticalLayout_2">
+    <layout class="QHBoxLayout" name="horizontalLayout_6">
+     <item>
+      <spacer name="horizontalSpacer_5">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="csvReadLineEdit"/>
+     </item>
+     <item>
+      <widget class="QPushButton" name="csvReadButton">
+       <property name="text">
+        <string>Read from CSV</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QVBoxLayout" name="vertLayout">
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_3">
        <item>
@@ -76,11 +103,14 @@
        <item>
         <widget class="QPushButton" name="pointPairButton">
          <property name="text">
-          <string>Add Point Pair</string>
+          <string>Add point pair manually</string>
          </property>
         </widget>
        </item>
       </layout>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_10"/>
      </item>
      <item>
       <widget class="QLabel" name="label_5">
@@ -110,16 +140,6 @@
           <string>Return images</string>
          </property>
          <property name="checked">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="removeDcCheckbox">
-         <property name="text">
-          <string>Remove DC</string>
-         </property>
-         <property name="checked">
           <bool>false</bool>
          </property>
         </widget>
@@ -130,7 +150,7 @@
           <string>Taper ROI</string>
          </property>
          <property name="checked">
-          <bool>true</bool>
+          <bool>false</bool>
          </property>
         </widget>
        </item>
@@ -164,7 +184,7 @@
           <string>0.1</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -184,7 +204,7 @@
           <string>0.3</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -194,7 +214,7 @@
           <string>0.4</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -204,7 +224,7 @@
           <string>0.6</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -214,7 +234,7 @@
           <string>0.8</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -295,9 +315,16 @@
       </layout>
      </item>
      <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_9">
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>ROI Type:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_4">
        <item>
-        <spacer name="horizontalSpacer_5">
+        <spacer name="horizontalSpacer_6">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
          </property>
@@ -309,6 +336,61 @@
          </property>
         </spacer>
        </item>
+       <item>
+        <widget class="QRadioButton" name="sphericalRadioButton">
+         <property name="text">
+          <string>Spherical</string>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="cubicRadioButton">
+         <property name="text">
+          <string>Cubic</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_8">
+       <property name="text">
+        <string>Custom name:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_5">
+       <item>
+        <spacer name="horizontalSpacer_7">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="customLineEdit">
+         <property name="text">
+          <string>Scan</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_9">
        <item>
         <widget class="QPushButton" name="executeButton">
          <property name="text">
