@@ -558,28 +558,14 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
         for p1, p2 in point_pairs:
             for radius_mult in radiusList: # for different radius multipliers
                  # get the spherical ROI
-<<<<<<< HEAD
                 roi, mask, bbox, rho, rho_mm, recist = analysis.extractSphericalROI(sitk_img, p1, p2, spherical = not self.ui.cubicRadioButton.isChecked(), 
                                                                                     taper=self.ui.taperRoiCheckbox.isChecked(), alpha=0.25, radius_multiplier=radius_mult)
-=======
-                roi, mask, bbox, rho, rho_mm, recist = \
-                    analysis.extractROI(sitk_img, p1, p2, window=self.ui.taperRoiCheckbox.isChecked(), alpha=0.25, radius_multiplier=radius_mult, spherical=self.ui.sphericalRadioButton.isChecked())
->>>>>>> 267b81a0bb23e65bc9affffc0259bc8104565c3f
 
                 for cutoff in checkboxList: # for different cycle/mm cutoffs, put here so we don't have to recompute ROI
 
                     # compute frequency filter and energy fraction of our ROI
                     frac, E_total, E_high, img_cube, arr, arr_filt, mag_log, mag_filt_log = \
-<<<<<<< HEAD
                         analysis.frequency_filter(roi, cutoff=cutoff)
-=======
-                        analysis.frequencyFilter3D(roi, cutoff=cutoff)
-                    
-                    D2_frac, D2_E_total, D2_E_high, D2_img_sq, D2_arr, D2_arr_filt, D2_mag_log, D2_mag_filt_log = \
-                        analysis.frequencyFilter2D(img_cube, cutoff=cutoff)
-
-
->>>>>>> 267b81a0bb23e65bc9affffc0259bc8104565c3f
 
                     # recreate sitk filtered image and copy metadata
                     img_filt = sitk.GetImageFromArray(arr_filt)
@@ -680,15 +666,11 @@ class Analysis:
     # sitk image, Point(), Point()
     # cosine tapering only available in spherical ROI, can implement later if needed
     @staticmethod
-<<<<<<< HEAD
     def extractSphericalROI(image_sitk, p1, p2, spherical=False, taper=False, alpha=0.25, radius_multiplier=1.0):
 
         print("taper:", taper, "type:", type(taper), "repr:", repr(taper))
 
 
-=======
-    def extractROI(image_sitk, p1, p2, window=True, alpha=0.25, radius_multiplier=1.0, spherical=False):
->>>>>>> 267b81a0bb23e65bc9affffc0259bc8104565c3f
         image = sitk.GetArrayFromImage(image_sitk)  # arr order: (z,y,x)
 
         # find midpoint between p1 and p2
@@ -838,11 +820,7 @@ class Analysis:
 
     # sitk image, cutoff for ideal HP filter, 
     @staticmethod
-<<<<<<< HEAD
     def frequency_filter(image, cutoff=0.4):
-=======
-    def frequencyFilter3D(image, cutoff=0.4):
->>>>>>> 267b81a0bb23e65bc9affffc0259bc8104565c3f
 
         img = sitk.Cast(image, sitk.sitkFloat32)
 
