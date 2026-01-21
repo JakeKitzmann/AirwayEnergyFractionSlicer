@@ -57,10 +57,34 @@
     <widget class="QTableWidget" name="pointsTable"/>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="vertLayout">
+    <layout class="QHBoxLayout" name="horizontalLayout_6">
      <item>
-      <layout class="QVBoxLayout" name="layout"/>
+      <spacer name="horizontalSpacer_5">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
      </item>
+     <item>
+      <widget class="QLineEdit" name="csvReadLineEdit"/>
+     </item>
+     <item>
+      <widget class="QPushButton" name="csvReadButton">
+       <property name="text">
+        <string>Read from CSV</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QVBoxLayout" name="vertLayout">
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_3">
        <item>
@@ -79,11 +103,14 @@
        <item>
         <widget class="QPushButton" name="pointPairButton">
          <property name="text">
-          <string>Add Point Pair</string>
+          <string>Add point pair manually</string>
          </property>
         </widget>
        </item>
       </layout>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_10"/>
      </item>
      <item>
       <widget class="QLabel" name="label_5">

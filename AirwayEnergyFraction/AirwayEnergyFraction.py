@@ -142,6 +142,8 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
         self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onInputVolumeChanged)
         self.ui.pointsTable.itemChanged.connect(self.onPointsTableEdited)
 
+        self.ui.csvReadButton.connect('clicked(bool)', self.onCsvReadButton)
+
          # initialize active volume + table
         currentVol = self._parameterNode.inputVolume
         self.onInputVolumeChanged(currentVol)
@@ -200,6 +202,88 @@ class AirwayEnergyFractionWidget(ScriptedLoadableModuleWidget, VTKObservationMix
         interactionNode = slicer.mrmlScene.GetNodeByID("vtkMRMLInteractionNodeSingleton")
         interactionNode.SetPlaceModePersistence(1)     
         interactionNode.SetCurrentInteractionMode(interactionNode.Place)
+
+    def onCsvReadButton(self):
+        csv_path = self.ui.csvReadLineEdit.text.strip()
+        if not os.path.exists(csv_path):
+            slicer.util.errorDisplay(f"CSV file does not exist: {csv_path}")
+            return
+
+        # must have an active volume to know where to load into
+        vol = self._parameterNode.inputVolume
+        if vol is None:
+            slicer.util.errorDisplay("Select an input volume first.")
+            return
+
+        try:
+            df = pd.read_csv(csv_path)
+        except Exception as e:
+            slicer.util.errorDisplay(f"Failed to read CSV file:\n{str(e)}")
+            return
+
+        # required columns in your output
+        required = ["p1_x","p1_y","p1_z","p2_x","p2_y","p2_z"]
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            slicer.util.errorDisplay(f"CSV missing required columns: {missing}")
+            return
+
+        # If present, filter by current volume_id so you don't mix points across scans
+        if "volume_id" in df.columns:
+            df = df[df["volume_id"].astype(str) == str(vol.GetID())]
+
+        if df.empty:
+            slicer.util.errorDisplay("No rows found for the current volume (or CSV is empty).")
+            return
+
+        def _ijk_str(row, prefix):
+            # prefix is "p1" or "p2"
+            x = int(round(float(row[f"{prefix}_x"])))
+            y = int(round(float(row[f"{prefix}_y"])))
+            z = int(round(float(row[f"{prefix}_z"])))
+            return f"{x},{y},{z}"
+
+        # Build unique point pairs (order-sensitive). If you want order-insensitive, see note below.
+        unique_pairs = []
+        seen = set()
+
+        for _, row in df.iterrows():
+            try:
+                s1 = _ijk_str(row, "p1")
+                s2 = _ijk_str(row, "p2")
+            except Exception:
+                continue
+
+            key = (s1, s2)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_pairs.append(key)
+
+        if not unique_pairs:
+            slicer.util.errorDisplay("No valid point pairs could be parsed from the CSV.")
+            return
+
+        # Merge into existing pairs for this volume, keeping uniqueness
+        self._saveTableForActiveVolume()
+        vol_id = vol.GetID()
+        existing = self.pointPairsByVolumeId.get(vol_id, [])
+
+        existing_set = set(existing)
+        merged = list(existing)  # keep original order
+        for p in unique_pairs:
+            if p not in existing_set:
+                merged.append(p)
+                existing_set.add(p)
+
+        # Push to table + persist in dict
+        self.pointPairsByVolumeId[vol_id] = merged
+        self._pairsToTable(merged)
+
+        slicer.util.infoDisplay(f"Loaded {len(unique_pairs)} unique pairs from CSV "
+                                f"(table now has {len(merged)} total for this volume).")
+
+                
 
     # read the table into Point pairs for use in analysis
     def _tableToPairs(self):
